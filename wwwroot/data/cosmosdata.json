@@ -1,0 +1,52 @@
+{
+  "Documents": [
+    {
+      "id": "1",
+      "Name": "John Doe",
+      "Email": "john@example.com",
+      "Age": 30,
+      "RegisteredOn": "2025-01-15T10:30:00Z",
+      "Address": {
+        "Street": "123 Main St",
+        "City": "New York",
+        "Zip": "10001"
+      },
+      "Orders": [
+        {
+          "OrderId": "A001",
+          "Amount": 250.75
+        },
+        {
+          "OrderId": "A002",
+          "Amount": 89.99
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "Name": "Jane Smith",
+      "Email": "jane@example.com",
+      "RegisteredOn": "2025-02-10T14:45:00Z",
+      "Address": {
+        "Street": "456 Elm St",
+        "City": "Los Angeles"
+      },
+      "Membership": {
+        "Type": "Gold",
+        "Since": "2023-05-01"
+      }
+    },
+    {
+      "id": "3",
+      "Name": "Michael Johnson",
+      "Age": 41,
+      "RegisteredOn": "2024-12-20T09:00:00Z",
+      "Address": {
+        "Street": "789 Oak Ave",
+        "City": "Chicago",
+        "Zip": "60601"
+      }
+    }
+  ],
+  "_count": 3
+}
