@@ -6,7 +6,8 @@
     "image": "/images/product-1.jpg",
     "rating": 4,
     "link": "Product/Details",
-    "buyimage": "/images/buy-1.jpg"
+    "buyimage": "/images/buy-1.jpg",
+    "timestamp": "2025-08-19T04:27:00Z"
   },
   {
     "id": 2,
@@ -15,7 +16,8 @@
     "image": "/images/product-2.jpg",
     "rating": 5,
     "link": "Product/Details",
-    "buyimage": "/images/buy-2.jpg"
+    "buyimage": "/images/buy-2.jpg",
+    "timestamp": "2025-08-19T04:28:00Z"
   },
   {
     "id": 3,
@@ -24,77 +26,88 @@
     "image": "/images/product-3.jpg",
     "rating": 3,
     "link": "Product/Details",
-    "buyimage": "/images/buy-3.jpg"
+    "buyimage": "/images/buy-3.jpg",
+    "timestamp": "2025-08-19T04:29:00Z"
   },
   {
     "id": 4,
     "name": "Navy-Blue Polo T-Shirt",
     "price": 500,
     "image": "/images/product-4.jpg",
-    "rating": 4
+    "rating": 4,
+    "timestamp": "2025-08-19T04:30:00Z"
   },
   {
     "id": 5,
     "name": "Grey Sneakers Men",
     "price": 500,
     "image": "/images/product-5.jpg",
-    "rating": 4
+    "rating": 4,
+    "timestamp": "2025-08-19T04:31:00Z"
   },
   {
     "id": 6,
     "name": "Printed Black T-Shirt",
     "price": 500,
     "image": "images/product-6.jpg",
-    "rating": 5
+    "rating": 5,
+    "timestamp": "2025-08-19T04:32:00Z"
   },
   {
     "id": 7,
     "name": "Triple Sock Set",
     "price": 500,
     "image": "images/product-7.jpg",
-    "rating": 4
+    "rating": 4,
+    "timestamp": "2025-08-19T04:33:00Z"
   },
   {
     "id": 8,
     "name": "Black Wrist Watch-Fastrack",
     "price": 500,
     "image": "images/product-8.jpg",
-    "rating": 4
+    "rating": 4,
+    "timestamp": "2025-08-19T04:34:00Z"
   },
   {
     "id": 9,
     "name": "Black Leather Watch",
     "price": 500,
     "image": "images/product-9.jpg",
-    "rating": 5
+    "rating": 5,
+    "timestamp": "2025-08-19T04:35:00Z"
   },
   {
     "id": 10,
     "name": "Black-Red Sports Shoes",
     "price": 500,
     "image": "images/product-10.jpg",
-    "rating": 4
+    "rating": 4,
+    "timestamp": "2025-08-19T04:36:00Z"
   },
   {
     "id": 11,
     "name": "Grey Walking Shoes",
     "price": 500,
     "image": "images/product-11.jpg",
-    "rating": 5
+    "rating": 5,
+    "timestamp": "2025-08-19T04:37:00Z"
   },
   {
     "id": 12,
     "name": "Black Track Pant",
     "price": 500,
     "image": "images/product-12.jpg",
-    "rating": 4
+    "rating": 4,
+    "timestamp": "2025-08-19T04:38:00Z"
   },
   {
     "id": 13,
     "name": "Black Track Pant",
     "price": 500,
     "image": "images/product-12.jpg",
-    "buyimage" : "/images/buyimage.jpg",
-    "rating": 4
+    "buyimage": "/images/buyimage.jpg",
+    "rating": 4,
+    "timestamp": "2025-08-19T04:39:00Z"
   }
 ]

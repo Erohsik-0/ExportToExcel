@@ -1,7 +1,26 @@
+using CsvExporterLibrary.DIContainer;
+using ExportExcel.DependencyInjectionContainer;
+using PresentationExporter.DependencyInjectionContainer;
+using TimeZoneConvertorLibrary.Extensions;
+
 var builder = WebApplication.CreateBuilder(args);
+
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+
+//Registering the services for CsvExportPkg library
+builder.Services.AddCsvExporterServices();
+
+//Registering the services for TimeZoneConvertor Library
+builder.Services.AddTimeZoneConversionServices();
+
+//Registering the services for ExportExcel Library
+builder.Services.AddExcelExporterServices();
+
+//Registering the services for PresentationExporter Library
+builder.Services.AddPresentationExportServices();
 
 var app = builder.Build();
 
@@ -17,6 +36,8 @@ app.UseHttpsRedirection();
 app.UseRouting();
 
 app.UseAuthorization();
+
+app.MapControllers();
 
 app.MapStaticAssets();
 

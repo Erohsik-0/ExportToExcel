@@ -3,10 +3,468 @@
 }
 
 <div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+    <div class="mb-5"></div>
 
-    <a asp-action="ExportToExcel" asp-controller="Home" download">Download Json Sample Data</a>
+    <!-- JSON -> Excel -->
+    <form asp-action="ExportToExcel" asp-controller="Home" method="get">
+        <label>Custom file name for JSON -> Excel</label>
+        <input type="text" name="fileName" placeholder="Enter filename (e.g. data.json)"  />
+        <button type="submit">JSON -> Excel</button>
+    </form>
     <br />
-    <a asp-action="ExportToExcel2" asp-controller="Home" download">Download CosmosDB Sample Data</a>
+
+    <!-- Excel -> JSON -->
+    <form asp-action="ConvertExcelToJson" asp-controller="Home" method="get">
+        <label>Custom file name for Excel -> JSON</label>
+        <input type="text" name="fileName" placeholder="Enter filename (e.g. data.xlsx)"  />
+        <button type="submit">Excel -> JSON</button>
+    </form>
+    <br />
+
+    <!-- Nested JSON -> Excel -->
+    <form asp-action="ExportToExcel2" asp-controller="Home" method="get">
+        <label>Custom file name for Nested JSON -> Excel</label>
+        <input type="text" name="fileName" placeholder="Enter filename (e.g. nested.json)"  />
+        <button type="submit">Nested JSON -> Excel</button>
+    </form>
+    <br />
+
+    <!-- JSON -> PPT -->
+    <form asp-action="ExportToPptx" asp-controller="Home" method="get">
+        <label>Custom file name for JSON -> PPT</label>
+        <input type="text" name="fileName" placeholder="Enter filename (e.g. data.json)"  />
+        <button type="submit">JSON -> PPT</button>
+    </form>
+    <br />
+
+    <!-- Nested JSON -> PPT -->
+    <form asp-action="ExportToPptx2" asp-controller="Home" method="get">
+        <label>Custom file name for Nested JSON -> PPT</label>
+        <input type="text" name="fileName" placeholder="Enter filename (e.g. nested.json)"  />
+        <button type="submit">Nested JSON -> PPT</button>
+    </form>
+    <br />
+
+    <!-- Images -> PPT -->
+    <form asp-action="ExportImagesToPptx" asp-controller="Home" method="get">
+        <label>Custom file name for Images -> PPT</label>
+        <input type="text" name="fileName" placeholder="Enter folder name (e.g. images)"  />
+        <button type="submit">Images -> PPT</button>
+    </form>
+    <br />
+
+    <!-- JSON -> CSV -->
+    <form asp-action="JsonToCsvExporter" asp-controller="Home" method="get">
+        <label>Custom file name for JSON -> CSV</label>
+        <input type="text" name="fileName" placeholder="Enter filename (e.g. data.json)"  />
+        <button type="submit">JSON -> CSV</button>
+    </form>
+    <br />
+
+    <!-- CSV -> JSON -->
+    <form asp-action="CsvToJsonExporter" asp-controller="Home" method="get">
+        <label>Custom file name for CSV -> JSON</label>
+        <input type="text" name="fileName" placeholder="Enter filename (e.g. data.csv)"  />
+        <button type="submit">CSV -> JSON</button>
+    </form>
+
+
+    <br />
+    <br />
+    <br />
+    <!-- Add this section to your Views/Home/Index.cshtml file -->
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0">
+                            <i class="fas fa-clock"></i> Excel TimeZone Converter
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <form id="timezoneForm" enctype="multipart/form-data">
+                            <div class="row">
+                                <!-- File Upload -->
+                                <div class="col-md-12 mb-3">
+                                    <label for="excelFile" class="form-label">
+                                        <i class="fas fa-file-excel"></i> Select Excel File
+                                    </label>
+                                    <input type="file" class="form-control" id="excelFile" name="excelFile"
+                                           accept=".xlsx,.xlsm" required>
+                                    <div class="form-text">
+                                        Supported formats: .xlsx, .xlsm (Max size: 50MB)
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="customFileName" class="form-label">
+                                        Custom File Name (Optional)
+                                    </label>
+                                    <input type="text" class="form-control" id="customFileName" name="customFileName"/>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <!-- Column Name -->
+                                <div class="col-md-6 mb-3">
+                                    <label for="columnName" class="form-label">
+                                        <i class="fas fa-columns"></i> Timestamp Column Name
+                                    </label>
+                                    <input type="text" class="form-control" id="columnName" name="columnName"
+                                           placeholder="e.g., timestamp, created_date, modified_time" required>
+                                    <div class="form-text">
+                                        Enter the exact column name containing timestamps
+                                    </div>
+                                </div>
+
+                                <!-- Source TimeZone -->
+                                <div class="col-md-3 mb-3">
+                                    <label for="sourceTimeZone" class="form-label">
+                                        <i class="fas fa-globe-americas"></i> Source TimeZone
+                                    </label>
+                                    <select class="form-select" id="sourceTimeZone" name="sourceTimeZone" required>
+                                        <option value="">Select source timezone...</option>
+                                        <option value="UTC" selected>UTC</option>
+                                    </select>
+                                </div>
+
+                                <!-- Target TimeZone -->
+                                <div class="col-md-3 mb-3">
+                                    <label for="targetTimeZone" class="form-label">
+                                        <i class="fas fa-globe-asia"></i> Target TimeZone
+                                    </label>
+                                    <select class="form-select" id="targetTimeZone" name="targetTimeZone" required>
+                                        <option value="">Select target timezone...</option>
+                                        <option value="Asia/Kolkata">Asia/Kolkata</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Progress Bar -->
+                            <div class="row" id="progressContainer" style="display: none;">
+                                <div class="col-12 mb-3">
+                                    <div class="progress">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                             role="progressbar" style="width: 0%" id="progressBar">
+                                            <span id="progressText">Processing...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <div class="row">
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary btn-lg" id="convertBtn">
+                                        <i class="fas fa-exchange-alt"></i> Convert TimeZone
+                                    </button>
+                                    <button type="button" class="btn btn-secondary ms-2" id="resetBtn">
+                                        <i class="fas fa-undo"></i> Reset
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Popular TimeZones Quick Select -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Quick TimeZone Selection</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Popular Source TimeZones:</h6>
+                                <div class="btn-group-vertical d-grid gap-1" role="group">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm timezone-quick-select"
+                                            data-target="sourceTimeZone" data-value="UTC">
+                                        UTC
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm timezone-quick-select"
+                                            data-target="sourceTimeZone" data-value="America/New_York">
+                                        America/New_York (EST/EDT)
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm timezone-quick-select"
+                                            data-target="sourceTimeZone" data-value="Europe/London">
+                                        Europe/London (GMT/BST)
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Popular Target TimeZones:</h6>
+                                <div class="btn-group-vertical d-grid gap-1" role="group">
+                                    <button type="button" class="btn btn-outline-primary btn-sm timezone-quick-select"
+                                            data-target="targetTimeZone" data-value="Asia/Kolkata">
+                                        Asia/Kolkata (IST)
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary btn-sm timezone-quick-select"
+                                            data-target="targetTimeZone" data-value="America/Los_Angeles">
+                                        America/Los_Angeles (PST/PDT)
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary btn-sm timezone-quick-select"
+                                            data-target="targetTimeZone" data-value="Asia/Tokyo">
+                                        Asia/Tokyo (JST)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Load available timezones
+            loadTimeZones();
+
+            // Quick select buttons
+            $('.timezone-quick-select').click(function() {
+                const target = $(this).data('target');
+                const value = $(this).data('value');
+                $(`#${target}`).val(value);
+            });
+
+            // Form submission
+            $('#timezoneForm').submit(function(e) {
+                e.preventDefault();
+                convertTimeZone();
+            });
+
+            // Reset form
+            $('#resetBtn').click(function() {
+                $('#timezoneForm')[0].reset();
+                hideProgress();
+            });
+
+            // File validation
+            $('#excelFile').change(function() {
+                const file = this.files[0];
+                if (file) {
+                    const maxSize = 50 * 1024 * 1024; // 50MB
+                    if (file.size > maxSize) {
+                        alert('File size exceeds 50MB limit.');
+                        $(this).val('');
+                        return;
+                    }
+
+                    const allowedTypes = [
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        'application/vnd.ms-excel.sheet.macroEnabled.12'
+                    ];
+
+                    if (!allowedTypes.includes(file.type)) {
+                        alert('Please select a valid Excel file (.xlsx or .xlsm)');
+                        $(this).val('');
+                        return;
+                    }
+                }
+            });
+        });
+
+        function loadTimeZones() {
+            $.get('/GetAvailableTimeZones', function(timezones) {
+                const sourceSelect = $('#sourceTimeZone');
+                const targetSelect = $('#targetTimeZone');
+
+                // Clear existing options except the first one
+                sourceSelect.find('option:not(:first)').remove();
+                targetSelect.find('option:not(:first)').remove();
+
+                // Add timezone options
+                timezones.forEach(function(tz) {
+                    sourceSelect.append(`<option value="${tz.value}">${tz.text}</option>`);
+                    targetSelect.append(`<option value="${tz.value}">${tz.text}</option>`);
+                });
+
+                // Set default values
+                sourceSelect.val('UTC');
+                targetSelect.val('Asia/Kolkata');
+            }).fail(function() {
+                console.warn('Failed to load timezones. Using fallback options.');
+            });
+        }
+
+        function convertTimeZone() {
+            // Validate form
+            if (!validateForm()) {
+                return;
+            }
+
+            // Show progress
+            showProgress();
+
+            // Disable submit button
+            $('#convertBtn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Converting...');
+
+            // Prepare FormData for AJAX POST
+            const formData = new FormData($('#timezoneForm')[0]);
+
+            $.ajax({
+                url: '/ConvertExcelTimeZone',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                xhrFields: {
+                    responseType: 'blob'
+                },
+                success: function(data, textStatus, xhr) {
+                    // Create download link
+                    const blob = new Blob([data], {
+                        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    });
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    let filename = 'converted_file.xlsx';
+                    const disposition = xhr.getResponseHeader('Content-Disposition');
+                    if (disposition) {
+                        const matches = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (matches != null && matches[1]) {
+                            filename = matches[1].replace(/['"]/g, '');
+                        }
+                    }
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                    showAlert('success', 'TimeZone conversion completed successfully!');
+                    updateProgress(100, 'Conversion completed!');
+                    setTimeout(hideProgress, 2000);
+                },
+                error: function(xhr) {
+                    let errorMessage = 'An error occurred during conversion.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    } else if (xhr.responseText) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            errorMessage = response.message || response.error || errorMessage;
+                        } catch(e) {
+                            errorMessage = xhr.responseText;
+                        }
+                    }
+                    showAlert('danger', errorMessage);
+                    hideProgress();
+                },
+                complete: function() {
+                    $('#convertBtn').prop('disabled', false).html('<i class="fas fa-exchange-alt"></i> Convert TimeZone');
+                }
+            });
+        }
+
+        function validateForm() {
+            const file = $('#excelFile')[0].files[0];
+            const customFileName = $('#customFileName').val().trim();
+            const columnName = $('#columnName').val().trim();
+            const sourceTimeZone = $('#sourceTimeZone').val();
+            const targetTimeZone = $('#targetTimeZone').val();
+
+            if (!file) {
+                showAlert('warning', 'Please select an Excel file.');
+                return false;
+            }
+
+            if (!columnName) {
+                showAlert('warning', 'Please enter the column name.');
+                return false;
+            }
+
+            if (!sourceTimeZone) {
+                showAlert('warning', 'Please select a source timezone.');
+                return false;
+            }
+
+            if (!targetTimeZone) {
+                showAlert('warning', 'Please select a target timezone.');
+                return false;
+            }
+
+            if (sourceTimeZone === targetTimeZone) {
+                showAlert('info', 'Source and target timezones are the same. No conversion needed.');
+                return false;
+            }
+
+            return true;
+        }
+
+        function showProgress() {
+            $('#progressContainer').show();
+            updateProgress(0, 'Starting conversion...');
+        }
+
+        function hideProgress() {
+            $('#progressContainer').hide();
+            updateProgress(0, '');
+        }
+
+        function updateProgress(percent, message) {
+            $('#progressBar').css('width', percent + '%');
+            $('#progressText').text(message);
+        }
+
+        function showAlert(type, message) {
+            // Remove any existing alerts
+            $('.alert').remove();
+
+            const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show mt-3" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+
+            $('#timezoneForm').after(alertHtml);
+
+            // Auto-hide success messages after 5 seconds
+            if (type === 'success') {
+                setTimeout(() => $('.alert-success').fadeOut(), 5000);
+            }
+        }
+    </script>
+}
+
+<!-- Add this CSS for better styling -->
+<style>
+    .timezone-quick-select {
+        font-size: 0.875rem;
+        text-align: left;
+    }
+
+    .progress {
+        height: 25px;
+    }
+
+    .progress-bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .card-header {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #495057;
+    }
+
+    .btn-lg {
+        font-size: 1.1rem;
+        padding: 0.75rem 1.5rem;
+    }
+</style>

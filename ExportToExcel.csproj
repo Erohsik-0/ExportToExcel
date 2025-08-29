@@ -7,9 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ClosedXML" Version="0.105.0" />
-    <PackageReference Include="EPPlus" Version="8.0.8" />
+    <PackageReference Include="CsvExporterPkg" Version="1.0.1" />
+    <PackageReference Include="ExcelExporterLibrary" Version="1.0.3" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="PresentationExporterLibrary" Version="1.0.5" />
+    <PackageReference Include="TimeZoneConversionPkg" Version="2.0.0" />
   </ItemGroup>
 
 </Project>

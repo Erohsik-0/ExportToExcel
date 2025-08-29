@@ -1,20 +1,44 @@
+﻿using CsvExporterLibrary.Exceptions;
+using CsvExporterLibrary.Interfaces;
+using ExportExcel.Interfaces;
+using ExportExcel.Models;
 using ExportToExcel.Models;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using ClosedXML.Excel;
+using PresentationExporter.Interfaces;
+using PresentationExporter.Models;
 using System.Diagnostics;
+using System.Text;
+using TimeZoneConvertorLibrary.Interfaces;
 
 namespace ExportToExcel.Controllers
 {
     public class HomeController : Controller
     {
-        private readonly ILogger<HomeController> _logger;
 
-        public HomeController(ILogger<HomeController> logger)
+        private readonly IExcelExporter _excelExporter;
+        private readonly IPresentationExportService _presentationExportService;
+        private readonly string dataFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data");
+        private readonly ILogger<HomeController> _logger;
+        private readonly ITimeZoneConversionService _timeZoneConversionService;
+        private readonly IAsyncExcelImporter _excelToJsonConverter;
+        private readonly ICsvExportService _csvExportService;
+
+
+        public HomeController(ICsvExportService csvExportService, ITimeZoneConversionService timeZoneConversionService,
+            ILogger<HomeController> logger, IExcelExporter excelExporter, IAsyncExcelImporter excelImporter , IPresentationExportService presentationExporter)
         {
-            _logger = logger;
+
+            _excelToJsonConverter = excelImporter ?? throw new ArgumentNullException(nameof(excelImporter));
+            _excelExporter = excelExporter ?? throw new ArgumentNullException(nameof(excelExporter));
+
+            _presentationExportService = presentationExporter ?? throw new ArgumentNullException(nameof(presentationExporter));
+            _timeZoneConversionService = timeZoneConversionService ?? throw new ArgumentNullException(nameof(timeZoneConversionService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _csvExportService = csvExportService ?? throw new ArgumentNullException(nameof(csvExportService));
         }
+
+
 
         public IActionResult Index() => View();
 
@@ -27,639 +51,446 @@ namespace ExportToExcel.Controllers
         }
 
         [HttpGet("ExportToExcel")]
-        public IActionResult ExportToExcel()
+        public IActionResult ExportToExcel(string? filename = null)
         {
-            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", "jsondata.json");
+            string filePath = System.IO.Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", "jsondata.json");
 
             if (!System.IO.File.Exists(filePath))
                 return NotFound("JSON data not found");
 
-            var jsonString = System.IO.File.ReadAllText(filePath);
-
-            var dataList = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(jsonString);
-
-            using (var workbook = new XLWorkbook())
+            try
             {
-                var worksheet = workbook.Worksheets.Add("Data");
+                string jsonString = System.IO.File.ReadAllText(filePath);
 
-                if (dataList != null && dataList.Count > 0)
-                {
-                    // Preserve original order of headers from first item
-                    var headers = dataList[0].Keys.ToList();
+                var memoryStream = _excelExporter.ExportJsonToExcel(jsonString);
 
-                    // Add headers
-                    for (int col = 0; col < headers.Count; col++)
-                    {
-                        var headerCell = worksheet.Cell(1, col + 1);
-                        headerCell.Value = headers[col];
-                        StyleHeaderCell(headerCell);
-                    }
+                string outputFilename = string.IsNullOrWhiteSpace(filename)
+                    ? $"Export_{DateTime.Now:yyyy-MM-dd_HHmm}.xlsx"
+                    : $"{filename}.xlsx";
 
-                    worksheet.Range(1, 1, 1, headers.Count).SetAutoFilter();
-                    worksheet.SheetView.FreezeRows(1);
-
-                    // Add data
-                    for (int row = 0; row < dataList.Count; row++)
-                    {
-                        var rowData = dataList[row];
-                        for (int col = 0; col < headers.Count; col++)
-                        {
-                            var key = headers[col];
-                            if (rowData.TryGetValue(key, out var value))
-                            {
-                                var cell = worksheet.Cell(row + 2, col + 1);
-                                SetCellValueWithType(cell, value);
-                                StyleDataCell(cell);
-                            }
-                        }
-                    }
-
-                    worksheet.Columns().AdjustToContents();
-                }
-
-                using var stream = new MemoryStream();
-                workbook.SaveAs(stream);
-                var content = stream.ToArray();
-
-                string filename = $"Export_{DateTime.Now:yyyy-MM-dd_HHmm}.xlsx";
-                return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
+                return File(memoryStream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", outputFilename);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
             }
         }
 
         [HttpGet("ExportToExcel2")]
-        public IActionResult ExportToExcel2()
+        public IActionResult ExportToExcel2(string? filename = null)
         {
-            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", "cosmosdata.json");
+            string filePath = System.IO.Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", "cosmosdata.json");
 
             if (!System.IO.File.Exists(filePath))
                 return NotFound("JSON data not found");
 
-            var jsonString = System.IO.File.ReadAllText(filePath);
-
-            List<Dictionary<string, object>> flatList = new();
-            List<string> orderedHeaders = new(); // Track header order
-
-            Dictionary<string, object> FlattenJson(JToken token, string parentPath = "", bool isFirstItem = false)
+            try
             {
-                var result = new Dictionary<string, object>();
+                string jsonString = System.IO.File.ReadAllText(filePath);
 
-                if (token is JObject jObj)
+                var content = _excelExporter.ExportFlattenedJsonToExcel(jsonString);
+
+                if (content.Length == 0)
+                    return BadRequest("Invalid JSON format or no data found");
+
+                string outputFilename = string.IsNullOrWhiteSpace(filename)
+                    ? $"CosmosExport_{DateTime.Now:yyyy-MM-dd_HHmm}.xlsx"
+                    : $"{filename}.xlsx";
+
+                return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", outputFilename);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"An error occurred: {ex.Message}");
+            }
+        }
+
+        [HttpGet("ExportToPptx")]
+        public async Task<IActionResult> ExportToPptx(string? filename = null)
+        {
+            string filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", "jsondata.json");
+
+            if (!System.IO.File.Exists(filePath))
+                return NotFound("JSON data file for presentation not found.");
+
+            try
+            {
+                string jsonString = await System.IO.File.ReadAllTextAsync(filePath);
+
+                var request = new ExportRequest
                 {
-                    foreach (var prop in jObj.Properties())
-                    {
-                        string path = string.IsNullOrEmpty(parentPath) ? prop.Name : $"{parentPath}.{prop.Name}";
-                        var value = prop.Value;
+                    Content = jsonString,
+                    Format = InputFormat.Json
+                };
 
-                        if (value.Type == JTokenType.Object)
-                        {
-                            foreach (var nested in FlattenJson(value, path, isFirstItem))
-                            {
-                                result[nested.Key] = nested.Value;
-                                if (isFirstItem && !orderedHeaders.Contains(nested.Key))
-                                    orderedHeaders.Add(nested.Key);
-                            }
-                        }
-                        else if (value.Type == JTokenType.Array)
-                        {
-                            var array = value as JArray;
-                            for (int i = 0; i < array.Count; i++)
-                            {
-                                if (array[i] is JObject itemObj)
-                                {
-                                    foreach (var nested in FlattenJson(itemObj, $"{path}[{i}]", isFirstItem))
-                                    {
-                                        result[nested.Key] = nested.Value;
-                                        if (isFirstItem && !orderedHeaders.Contains(nested.Key))
-                                            orderedHeaders.Add(nested.Key);
-                                    }
-                                }
-                                else
-                                {
-                                    string arrayKey = $"{path}[{i}]";
-                                    result[arrayKey] = ((JValue)array[i]).Value;
-                                    if (isFirstItem && !orderedHeaders.Contains(arrayKey))
-                                        orderedHeaders.Add(arrayKey);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            result[path] = ((JValue)value).Value;
-                            if (isFirstItem && !orderedHeaders.Contains(path))
-                                orderedHeaders.Add(path);
-                        }
-                    }
+                byte[] pptxBytes = await _presentationExportService.ExportPresentationAsync(request);
+
+                if (pptxBytes?.Length > 0)
+                {
+                    string outputFilename = string.IsNullOrWhiteSpace(filename)
+                        ? $"PresentationExport_{DateTime.Now:yyyy-MM-dd_HHmm}.pptx"
+                        : $"{filename}.pptx";
+
+                    return File(
+                        pptxBytes,
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        outputFilename
+                    );
                 }
 
-                return result;
+                return BadRequest("Failed to generate presentation from the provided JSON data.");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error creating the presentation: {ex.Message}");
+            }
+        }
+
+        [HttpGet("ExportToPptx2")]
+        public async Task<IActionResult> ExportToPptx2(string? filename = null)
+        {
+            string filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", "cosmosdata.json");
+
+            if (!System.IO.File.Exists(filePath))
+                return NotFound("Cosmos JSON data file for presentation not found.");
+
+            try
+            {
+                string jsonString = await System.IO.File.ReadAllTextAsync(filePath);
+
+                var request = new ExportRequest
+                {
+                    Content = jsonString,
+                    Format = InputFormat.CosmosJson
+                };
+
+                byte[] pptxBytes = await _presentationExportService.ExportPresentationAsync(request);
+
+                if (pptxBytes?.Length > 0)
+                {
+                    string outputFilename = string.IsNullOrWhiteSpace(filename)
+                        ? $"CosmosPresentationExport_{DateTime.Now:yyyy-MM-dd_HHmm}.pptx"
+                        : $"{filename}.pptx";
+
+                    return File(
+                        pptxBytes,
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        outputFilename
+                    );
+                }
+
+                return BadRequest("Failed to generate presentation from the provided Cosmos DB JSON data.");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error creating the Cosmos presentation: {ex.Message}");
+            }
+        }
+
+
+        [HttpGet("ExportImagesToPptx")]
+        public async Task<IActionResult> ExportImagesToPptx(string? filename = null)
+        {
+            if (!Directory.Exists(dataFolder))
+                return NotFound("Data folder not found.");
+
+            try
+            {
+                var imageFilePaths = Directory.GetFiles(dataFolder, "*.*")
+                    .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                                f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                                f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                                f.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                if (!imageFilePaths.Any())
+                    return NotFound("No images found in data folder.");
+
+                var imageBytesList = imageFilePaths
+                    .Select(System.IO.File.ReadAllBytes)
+                    .ToList();
+
+                var request = new ExportRequest
+                {
+                    Images = imageBytesList,
+                    Format = InputFormat.Images
+                };
+
+                byte[] pptxBytes = await _presentationExportService.ExportPresentationAsync(request);
+
+                if (pptxBytes == null || pptxBytes.Length == 0)
+                {
+                    return BadRequest("Failed to generate a presentation from the provided images.");
+                }
+
+                string outputFilename = string.IsNullOrWhiteSpace(filename)
+                    ? $"AllImagesExport_{DateTime.Now:yyyy-MM-dd_HHmm}.pptx"
+                    : $"{filename}.pptx";
+
+                return File(pptxBytes,
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    outputFilename);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error creating the presentation: {ex.Message}");
+            }
+        }
+
+
+        //[HttpPost("ConvertExcelTimeZone")]
+        //public async Task<IActionResult> ConvertExcelTimeZone(IFormFile excelFile, string customFileName , string columnName, string sourceTimeZone, string targetTimeZone, CancellationToken cancellationToken = default)
+        //{
+        //    if (excelFile == null || excelFile.Length == 0)
+        //    {
+        //        return BadRequest("No file uploaded or file is empty.");
+        //    }
+
+        //    if (string.IsNullOrWhiteSpace(columnName))
+        //    {
+        //        return BadRequest("Column name is required.");
+        //    }
+
+        //    if (string.IsNullOrWhiteSpace(sourceTimeZone))
+        //    {
+        //        return BadRequest("Source time zone is required.");
+        //    }
+
+        //    if (string.IsNullOrWhiteSpace(targetTimeZone))
+        //    {
+        //        return BadRequest("Target time zone is required.");
+        //    }
+
+        //    // Validating file extension
+        //    var allowedExtensions = new[] { ".xlsx", ".xlsm" };
+        //    var fileExtension = Path.GetExtension(excelFile.FileName).ToLowerInvariant();
+
+        //    if (!allowedExtensions.Contains(fileExtension))
+        //    {
+        //        return BadRequest("Invalid file type. Only .xlsx and .xlsm files are allowed.");
+        //    }
+
+        //    // Check the file size (50MB limit by default)
+        //    const long maxFileSize = 50 * 1024 * 1024; // 50 MB
+        //    if (excelFile.Length > maxFileSize)
+        //    {
+        //        return BadRequest("File size exceeds the maximum limit of 50 MB.");
+        //    }
+
+        //    try
+        //    {
+        //        byte[] excelBytes;
+        //        using (var memoryStream = new MemoryStream())
+        //        {
+        //            await excelFile.CopyToAsync(memoryStream, cancellationToken);
+        //            excelBytes = memoryStream.ToArray();
+        //        }
+
+        //        // Create the conversion request using the new model
+        //        var request = new TimeZoneConversionRequest
+        //        {
+        //            ExcelData = excelBytes,
+        //            ColumnName = columnName,
+        //            SourceTimeZone = sourceTimeZone,
+        //            TargetTimeZone = targetTimeZone,
+        //            MaxFileSizeBytes = maxFileSize
+        //        };
+
+        //        // Create progress reporter for real-time updates
+        //        var progress = new Progress<ConversionProgress>(p =>
+        //        {
+        //            // You can log progress or send to SignalR hub for real-time updates
+        //            // For now, just log it
+        //            Console.WriteLine($"Progress: {p.PercentageComplete:F1}% - {p.CurrentOperation}");
+        //        });
+
+        //        // Use the orchestrator to perform the conversion
+        //        var result = await _orchestator.ConvertExcelTimeStampsAsync(request, progress);
+
+        //        if (!result.Success)
+        //        {
+        //            return BadRequest($"Conversion failed: {result.Message}");
+        //        }
+
+        //        if (result.ConvertedExcelData == null)
+        //        {
+        //            return BadRequest("Conversion succeeded, but the output data is empty.");
+        //        }
+
+        //        // Generate output filename
+        //        var originalFileName = Path.GetFileNameWithoutExtension(excelFile.FileName);
+        //        var outputFileName = string.IsNullOrWhiteSpace(customFileName) ? $"{originalFileName}_converted_{sourceTimeZone.Replace("/", "_")}_to_{targetTimeZone.Replace("/", "_")}_{DateTime.Now:yyyy-MM-dd_HHmm}.xlsx" : $"{customFileName}.xlsx";
+
+        //        return File(result.ConvertedExcelData, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", outputFileName);
+        //    }
+        //    catch (ArgumentException ex)
+        //    {
+        //        return BadRequest($"Invalid Input: {ex.Message}");
+        //    }
+        //    catch (InvalidOperationException ex)
+        //    {
+        //        return BadRequest($"Processing error: {ex.Message}");
+        //    }
+        //    catch (OperationCanceledException)
+        //    {
+        //        return StatusCode(408, "Request was cancelled or timed out");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        // Log the actual error for debugging
+        //        Console.WriteLine($"Unexpected error: {ex}");
+        //        return StatusCode(500, "An unexpected error occurred while processing the file");
+        //    }
+        //}
+
+        //// Helper actions to get available time zones
+        //[HttpGet("GetAvailableTimeZones")]
+        //public JsonResult GetAvailableTimeZones()
+        //{
+        //    try
+        //    {
+        //        var timeZones = _orchestator.GetAvailableTimeZones()
+        //            .Select(tz => new { value = tz, text = tz })
+        //            .OrderBy(tz => tz.text)
+        //            .ToList();
+
+        //        return Json(timeZones);
+        //    }
+        //    catch
+        //    {
+        //        // Return some common timezones as fallback
+        //        var fallbackTimeZones = new[]
+        //        {
+        //            new { value = "UTC", text = "UTC" },
+        //            new { value = "America/New_York", text = "America/New_York" },
+        //            new { value = "America/Los_Angeles", text = "America/Los_Angeles" },
+        //            new { value = "Europe/London", text = "Europe/London" },
+        //            new { value = "Europe/Paris", text = "Europe/Paris" },
+        //            new { value = "Asia/Kolkata", text = "Asia/Kolkata" },
+        //            new { value = "Asia/Tokyo", text = "Asia/Tokyo" },
+        //            new { value = "Australia/Sydney", text = "Australia/Sydney" }
+        //        };
+
+        //        return Json(fallbackTimeZones);
+        //    }
+        //}
+
+        //// Helper action to validate timezone
+        //[HttpPost("ValidateTimeZone")]
+        //public JsonResult ValidateTimeZone(string timeZoneId)
+        //{
+        //    try
+        //    {
+        //        var isValid = _orchestator.IsValidTimeZone(timeZoneId);
+        //        return Json(new { isValid });
+        //    }
+        //    catch
+        //    {
+        //        return Json(new { isValid = false });
+        //    }
+        //}
+
+
+        [HttpGet("ConvertExcelToJson")]
+        public async Task<IActionResult> ConvertExcelToJson(string? filename = null)
+        {
+            ConversionMode mode = ConversionMode.Auto;
+            string filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", "Export_2025-08-19_1139.xlsx");
+
+            if (!System.IO.File.Exists(filePath))
+            {
+                return NotFound("The specified Excel file was not found.");
             }
 
             try
             {
-                var token = JToken.Parse(jsonString);
-                bool isFirstItem = true;
+                var excelBytes = await System.IO.File.ReadAllBytesAsync(filePath);
 
-                if (token is JObject obj)
-                {
-                    if (obj["Documents"] is JArray docs)
-                    {
-                        foreach (var item in docs)
-                        {
-                            flatList.Add(FlattenJson(item, "", isFirstItem));
-                            isFirstItem = false;
-                        }
-                    }
-                    else if (obj["Items"] is JArray items)
-                    {
-                        foreach (var item in items)
-                        {
-                            flatList.Add(FlattenJson(item, "", isFirstItem));
-                            isFirstItem = false;
-                        }
-                    }
-                    else
-                    {
-                        flatList.Add(FlattenJson(obj, "", isFirstItem));
-                    }
-                }
-                else if (token is JArray arr)
-                {
-                    foreach (var item in arr)
-                    {
-                        flatList.Add(FlattenJson(item, "", isFirstItem));
-                        isFirstItem = false;
-                    }
-                }
+                var data = await _excelToJsonConverter.ConvertToDataAsync(excelBytes, mode);
+
+                string jsonString = JsonConvert.SerializeObject(data, Formatting.Indented);
+
+                var jsonBytes = Encoding.UTF8.GetBytes(jsonString);
+
+                string outputFilename = string.IsNullOrWhiteSpace(filename)
+                    ? $"ConvertedFromExcel_{DateTime.Now:yyyy-MM-dd_HHmm}.json"
+                    : $"{filename}.json";
+
+                return File(jsonBytes, "application/json", outputFilename);
             }
-            catch (JsonReaderException ex)
+            catch (Exception ex)
             {
-                return BadRequest($"Invalid JSON format: {ex.Message}");
+                return BadRequest($"An error occurred during conversion: {ex.Message}");
             }
-
-            using var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("Data");
-
-            if (flatList.Count > 0)
-            {
-                // Use ordered headers, then add any additional headers found in other items
-                var allHeaders = orderedHeaders.ToList();
-                var additionalHeaders = flatList.SelectMany(d => d.Keys)
-                                                .Distinct()
-                                                .Where(h => !allHeaders.Contains(h))
-                                                .OrderBy(h => h)
-                                                .ToList();
-                allHeaders.AddRange(additionalHeaders);
-
-                // Add headers
-                for (int col = 0; col < allHeaders.Count; col++)
-                {
-                    var headerCell = worksheet.Cell(1, col + 1);
-                    headerCell.Value = allHeaders[col];
-                    StyleHeaderCell(headerCell);
-                }
-
-                worksheet.Range(1, 1, 1, allHeaders.Count).SetAutoFilter();
-                worksheet.SheetView.FreezeRows(1);
-
-                // Add data rows
-                for (int row = 0; row < flatList.Count; row++)
-                {
-                    var rowData = flatList[row];
-                    for (int col = 0; col < allHeaders.Count; col++)
-                    {
-                        rowData.TryGetValue(allHeaders[col], out var value);
-                        var cell = worksheet.Cell(row + 2, col + 1);
-                        SetCellValueWithType(cell, value);
-                        StyleDataCell(cell);
-                    }
-                }
-
-                worksheet.Columns().AdjustToContents();
-            }
-
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            var content = stream.ToArray();
-
-            string filename = $"CosmosExport_{DateTime.Now:yyyy-MM-dd_HHmm}.xlsx";
-            return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
         }
 
-        [HttpGet("ExportToExcelGrouped")]
-        public IActionResult ExportToExcelGrouped(string groupByField = "category")
-        {
-            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", "jsondata.json");
 
+        [HttpGet("JsonToCsvExporter")]
+        public async Task<IActionResult> JsonToCsvExporter(string? filename = null)
+        {
+            string filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", "jsondata.json");
             if (!System.IO.File.Exists(filePath))
                 return NotFound("JSON data not found");
-
-            var jsonString = System.IO.File.ReadAllText(filePath);
-            var dataList = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(jsonString);
-
-            if (dataList == null || dataList.Count == 0)
-                return BadRequest("No data found in JSON file");
-
-            using var workbook = new XLWorkbook();
-
-            // Preserve original header order from first item
-            var headers = dataList[0].Keys.ToList();
-
-            // Group data by the specified field
-            var groupedData = dataList
-                .Where(item => item.ContainsKey(groupByField))
-                .GroupBy(item => item[groupByField]?.ToString() ?? "Unknown")
-                .OrderBy(g => g.Key)
-                .ToList();
-
-            // Handle items without the grouping field
-            var ungroupedData = dataList.Where(item => !item.ContainsKey(groupByField)).ToList();
-
-            // Create sheets for each group
-            foreach (var group in groupedData)
+            try
             {
-                CreateWorksheet(workbook, SanitizeSheetName(group.Key), group.ToList(), headers);
-            }
+                string jsonString = await System.IO.File.ReadAllTextAsync(filePath);
 
-            // Create sheet for ungrouped data if any exists
-            if (ungroupedData.Count > 0)
+                byte[] csvBytes = await _csvExportService.ConvertJsonToCsvAsync(jsonString);
+
+                if (csvBytes.Length == 0)
+                    return BadRequest("Conversion resulted in empty CSV data.");
+
+                string outputFilename = string.IsNullOrWhiteSpace(filename)
+                    ? $"Export_{DateTime.Now:yyyy-MM-dd_HHmm}.csv"
+                    : $"{filename}.csv";
+
+                return File(csvBytes, "text/csv", outputFilename);
+            }
+            catch (CsvExportException ex)
             {
-                CreateWorksheet(workbook, "Ungrouped", ungroupedData, headers);
+                return BadRequest($"Conversion Failed : {ex.UserFriendlyMessage}");
             }
-
-            // Create summary sheet
-            CreateSummarySheet(workbook, groupedData, ungroupedData.Count, groupByField);
-
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            var content = stream.ToArray();
-
-            string filename = $"GroupedExport_{groupByField}_{DateTime.Now:yyyy-MM-dd_HHmm}.xlsx";
-            return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
+            catch (Exception ex)
+            {
+                return BadRequest($"An error occurred: {ex.Message}");
+            }
         }
 
-        [HttpGet("ExportToExcelGroupedCosmos")]
-        public IActionResult ExportToExcelGroupedCosmos(string groupByField = "type")
+
+        [HttpGet("CsvToJsonExporter")]
+        public async Task<IActionResult> CsvToJsonExporter(string? filename = null)
         {
-            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", "cosmosdata.json");
-
-            if (!System.IO.File.Exists(filePath))
-                return NotFound("JSON data not found");
-
-            var jsonString = System.IO.File.ReadAllText(filePath);
-            List<Dictionary<string, object>> flatList = new();
-            List<string> orderedHeaders = new();
-
-            Dictionary<string, object> FlattenJson(JToken token, string parentPath = "", bool isFirstItem = false)
-            {
-                var result = new Dictionary<string, object>();
-
-                if (token is JObject jObj)
-                {
-                    foreach (var prop in jObj.Properties())
-                    {
-                        string path = string.IsNullOrEmpty(parentPath) ? prop.Name : $"{parentPath}.{prop.Name}";
-                        var value = prop.Value;
-
-                        if (value.Type == JTokenType.Object)
-                        {
-                            foreach (var nested in FlattenJson(value, path, isFirstItem))
-                            {
-                                result[nested.Key] = nested.Value;
-                                if (isFirstItem && !orderedHeaders.Contains(nested.Key))
-                                    orderedHeaders.Add(nested.Key);
-                            }
-                        }
-                        else if (value.Type == JTokenType.Array)
-                        {
-                            var array = value as JArray;
-                            for (int i = 0; i < array.Count; i++)
-                            {
-                                if (array[i] is JObject itemObj)
-                                {
-                                    foreach (var nested in FlattenJson(itemObj, $"{path}[{i}]", isFirstItem))
-                                    {
-                                        result[nested.Key] = nested.Value;
-                                        if (isFirstItem && !orderedHeaders.Contains(nested.Key))
-                                            orderedHeaders.Add(nested.Key);
-                                    }
-                                }
-                                else
-                                {
-                                    string arrayKey = $"{path}[{i}]";
-                                    result[arrayKey] = ((JValue)array[i]).Value;
-                                    if (isFirstItem && !orderedHeaders.Contains(arrayKey))
-                                        orderedHeaders.Add(arrayKey);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            result[path] = ((JValue)value).Value;
-                            if (isFirstItem && !orderedHeaders.Contains(path))
-                                orderedHeaders.Add(path);
-                        }
-                    }
-                }
-
-                return result;
-            }
+            string filepath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", "Export_2025-08-20_1624.csv");
 
             try
             {
-                var token = JToken.Parse(jsonString);
-                bool isFirstItem = true;
+                var csvBytes = await System.IO.File.ReadAllBytesAsync(filepath);
 
-                if (token is JObject obj)
-                {
-                    if (obj["Documents"] is JArray docs)
-                    {
-                        foreach (var item in docs)
-                        {
-                            flatList.Add(FlattenJson(item, "", isFirstItem));
-                            isFirstItem = false;
-                        }
-                    }
-                    else if (obj["Items"] is JArray items)
-                    {
-                        foreach (var item in items)
-                        {
-                            flatList.Add(FlattenJson(item, "", isFirstItem));
-                            isFirstItem = false;
-                        }
-                    }
-                    else
-                    {
-                        flatList.Add(FlattenJson(obj, "", isFirstItem));
-                    }
-                }
-                else if (token is JArray arr)
-                {
-                    foreach (var item in arr)
-                    {
-                        flatList.Add(FlattenJson(item, "", isFirstItem));
-                        isFirstItem = false;
-                    }
-                }
+                string jsonString = await _csvExportService.ConvertToJsonAsync(csvBytes);
+
+                if (string.IsNullOrWhiteSpace(jsonString) || jsonString == "[]")
+                    return BadRequest("Invalid CSV format or no data found to convert.");
+
+                string outputFilename = string.IsNullOrWhiteSpace(filename)
+                    ? $"Export_{DateTime.Now:yyyy-MM-dd_HHmm}.json"
+                    : $"{filename}.json";
+
+                return File(Encoding.UTF8.GetBytes(jsonString), "application/json", outputFilename);
             }
-            catch (JsonReaderException ex)
+            catch (CsvExportException ex)
             {
-                return BadRequest($"Invalid JSON format: {ex.Message}");
+                return BadRequest($"Conversion Failed : {ex.UserFriendlyMessage}");
             }
-
-            if (flatList.Count == 0)
-                return BadRequest("No data found after flattening");
-
-            using var workbook = new XLWorkbook();
-
-            // Use ordered headers, then add any additional headers found in other items
-            var allHeaders = orderedHeaders.ToList();
-            var additionalHeaders = flatList.SelectMany(d => d.Keys)
-                                            .Distinct()
-                                            .Where(h => !allHeaders.Contains(h))
-                                            .OrderBy(h => h)
-                                            .ToList();
-            allHeaders.AddRange(additionalHeaders);
-
-            // Group data by the specified field
-            var groupedData = flatList
-                .Where(item => item.ContainsKey(groupByField))
-                .GroupBy(item => item[groupByField]?.ToString() ?? "Unknown")
-                .OrderBy(g => g.Key)
-                .ToList();
-
-            // Handle items without the grouping field
-            var ungroupedData = flatList.Where(item => !item.ContainsKey(groupByField)).ToList();
-
-            // Create sheets for each group
-            foreach (var group in groupedData)
+            catch (Exception ex)
             {
-                CreateWorksheet(workbook, SanitizeSheetName(group.Key), group.ToList(), allHeaders);
+                return BadRequest($"An error occured : {ex.Message}");
             }
-
-            // Create sheet for ungrouped data if any exists
-            if (ungroupedData.Count > 0)
-            {
-                CreateWorksheet(workbook, "Ungrouped", ungroupedData, allHeaders);
-            }
-
-            // Create summary sheet
-            CreateSummarySheet(workbook, groupedData, ungroupedData.Count, groupByField);
-
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            var content = stream.ToArray();
-
-            string filename = $"CosmosGroupedExport_{groupByField}_{DateTime.Now:yyyy-MM-dd_HHmm}.xlsx";
-            return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
         }
 
-        private void CreateWorksheet(XLWorkbook workbook, string sheetName, List<Dictionary<string, object>> data, List<string> headers)
-        {
-            var worksheet = workbook.Worksheets.Add(sheetName);
 
-            if (data.Count == 0)
-            {
-                worksheet.Cell(1, 1).Value = "No data available";
-                return;
-            }
+        
 
-            // Add headers
-            for (int col = 0; col < headers.Count; col++)
-            {
-                var headerCell = worksheet.Cell(1, col + 1);
-                headerCell.Value = headers[col];
-                StyleHeaderCell(headerCell);
-            }
 
-            worksheet.Range(1, 1, 1, headers.Count).SetAutoFilter();
-            worksheet.SheetView.FreezeRows(1);
 
-            // Add data rows
-            for (int row = 0; row < data.Count; row++)
-            {
-                var rowData = data[row];
-                for (int col = 0; col < headers.Count; col++)
-                {
-                    var key = headers[col];
-                    if (rowData.TryGetValue(key, out var value))
-                    {
-                        var cell = worksheet.Cell(row + 2, col + 1);
-                        SetCellValueWithType(cell, value);
-                        StyleDataCell(cell);
-                    }
-                    else
-                    {
-                        var cell = worksheet.Cell(row + 2, col + 1);
-                        cell.Value = "";
-                        StyleDataCell(cell);
-                    }
-                }
-            }
-
-            worksheet.Columns().AdjustToContents();
-        }
-
-        private void CreateSummarySheet(XLWorkbook workbook, List<IGrouping<string, Dictionary<string, object>>> groupedData, int ungroupedCount, string groupByField)
-        {
-            var summarySheet = workbook.Worksheets.Add("Summary");
-
-            // Title
-            var titleCell = summarySheet.Cell(1, 1);
-            titleCell.Value = $"Export Summary - Grouped by {groupByField}";
-            titleCell.Style.Font.Bold = true;
-            titleCell.Style.Font.FontSize = 14;
-            titleCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            summarySheet.Range(1, 1, 1, 3).Merge();
-
-            // Headers
-            summarySheet.Cell(3, 1).Value = "Group";
-            summarySheet.Cell(3, 2).Value = "Record Count";
-            summarySheet.Cell(3, 3).Value = "Sheet Name";
-
-            for (int col = 1; col <= 3; col++)
-            {
-                StyleHeaderCell(summarySheet.Cell(3, col));
-            }
-
-            int row = 4;
-            int totalRecords = 0;
-
-            // Group data
-            foreach (var group in groupedData)
-            {
-                summarySheet.Cell(row, 1).Value = group.Key;
-                summarySheet.Cell(row, 2).Value = group.Count();
-                summarySheet.Cell(row, 3).Value = SanitizeSheetName(group.Key);
-
-                for (int col = 1; col <= 3; col++)
-                {
-                    StyleDataCell(summarySheet.Cell(row, col));
-                }
-
-                totalRecords += group.Count();
-                row++;
-            }
-
-            // Ungrouped data
-            if (ungroupedCount > 0)
-            {
-                summarySheet.Cell(row, 1).Value = "Ungrouped";
-                summarySheet.Cell(row, 2).Value = ungroupedCount;
-                summarySheet.Cell(row, 3).Value = "Ungrouped";
-
-                for (int col = 1; col <= 3; col++)
-                {
-                    StyleDataCell(summarySheet.Cell(row, col));
-                }
-
-                totalRecords += ungroupedCount;
-                row++;
-            }
-
-            // Total
-            summarySheet.Cell(row + 1, 1).Value = "Total Records:";
-            summarySheet.Cell(row + 1, 2).Value = totalRecords;
-            summarySheet.Cell(row + 1, 1).Style.Font.Bold = true;
-            summarySheet.Cell(row + 1, 2).Style.Font.Bold = true;
-            StyleDataCell(summarySheet.Cell(row + 1, 1));
-            StyleDataCell(summarySheet.Cell(row + 1, 2));
-
-            summarySheet.Columns().AdjustToContents();
-        }
-
-        private string SanitizeSheetName(string name)
-        {
-            if (string.IsNullOrWhiteSpace(name))
-                return "Unknown";
-
-            // Remove invalid characters for Excel sheet names
-            var invalidChars = new char[] { '/', '\\', '?', '*', '[', ']', ':' };
-            foreach (var invalidChar in invalidChars)
-            {
-                name = name.Replace(invalidChar, '_');
-            }
-
-            // Excel sheet names must be 31 characters or less
-            if (name.Length > 31)
-                name = name.Substring(0, 31);
-
-            return name;
-        }
-
-        private void StyleHeaderCell(IXLCell cell)
-        {
-            cell.Style.Font.Bold = true;
-            cell.Style.Fill.BackgroundColor = XLColor.LightGray;
-            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            cell.Style.Alignment.WrapText = true;
-            cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-        }
-
-        private void StyleDataCell(IXLCell cell)
-        {
-            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            cell.Style.Alignment.WrapText = true;
-            cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-        }
-
-        private void SetCellValueWithType(IXLCell cell, object value)
-        {
-            if (value == null)
-            {
-                cell.Value = "";
-                return;
-            }
-
-            if (value is bool b)
-            {
-                cell.Value = b;
-            }
-            else if (value is int i)
-            {
-                cell.Value = i;
-            }
-            else if (value is long l)
-            {
-                cell.Value = l;
-            }
-            else if (value is double d)
-            {
-                cell.Value = d;
-            }
-            else if (value is decimal m)
-            {
-                cell.Value = m;
-            }
-            else if (value is DateTime dt)
-            {
-                cell.Value = dt;
-                cell.Style.DateFormat.Format = "yyyy-mm-dd hh:mm:ss";
-            }
-            else
-            {
-                var str = value.ToString();
-
-                // Try parse for string-based values
-                if (bool.TryParse(str, out var boolParsed))
-                    cell.Value = boolParsed;
-                else if (int.TryParse(str, out var intParsed))
-                    cell.Value = intParsed;
-                else if (long.TryParse(str, out var longParsed))
-                    cell.Value = longParsed;
-                else if (decimal.TryParse(str, out var decimalParsed))
-                    cell.Value = decimalParsed;
-                else if (DateTime.TryParse(str, out var dtParsed))
-                {
-                    cell.Value = dtParsed;
-                    cell.Style.DateFormat.Format = "yyyy-mm-dd hh:mm:ss";
-                }
-                else
-                {
-                    cell.Value = str;
-                }
-            }
-        }
     }
 }
