@@ -1,0 +1,55 @@
+﻿@{
+    Layout = "_Layout"; 
+}
+
+<button id="prev">Prev</button>
+<span id="page-info"></span>
+<button id="next">Next</button>
+<ul id="listing"></ul>
+
+@section Scripts{
+
+
+    <script type="module">
+        import Paginator from '/js/paginator.js';
+
+        // sample data
+        const events = Array.from({ length: 25 }, (_, i) => ({ id: i+1, name: `Event ${i+1}` }));
+
+        // page 0 shows 5 items, later pages show 10
+        const paginator = new Paginator(events, {
+          initialPageSize: 5,
+          chunkSize: 10
+        });
+
+        const prevBtn = document.getElementById('prev');
+        const nextBtn = document.getElementById('next');
+        const info   = document.getElementById('page-info');
+        const list   = document.getElementById('listing');
+
+        function render() {
+          const { start, end, items } = paginator.range;
+          list.innerHTML = items
+            .map(evt => `<li>${evt.name}</li>`)
+            .join('');
+          info.textContent = `Viewing ${start+1}–${end} of ${paginator.totalItems}`;
+          prevBtn.disabled = !paginator.hasPrev;
+          nextBtn.disabled = !paginator.hasNext;
+        }
+
+        prevBtn.addEventListener('click', () => {
+          paginator.prev();
+          render();
+        });
+
+        nextBtn.addEventListener('click', () => {
+          paginator.next();
+          render();
+        });
+
+        // initial render
+        render();
+    </script>
+
+
+}
